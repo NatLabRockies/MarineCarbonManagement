@@ -2829,7 +2829,7 @@ class OAECosts:
 
         # Yearly techincal operating cost over plant lifetime
         lifetime_annual_operating_cost = np.zeros(self.plant_lifetime_yrs) 
-        lifetime_annual_operating_cost[0] = annual_operating_cost 
+        lifetime_annual_operating_cost[0] = annual_operating_cost[0] 
         for i in range(len(lifetime_annual_operating_cost)-1):
             lifetime_annual_operating_cost[i+1] = lifetime_annual_operating_cost[i] * (1+self.inflation_rate)
 
@@ -2839,7 +2839,7 @@ class OAECosts:
             S_lon = S_lon + (1+self.interest_rate)**t
         lifetime_annual_loan_repayment = np.zeros(self.plant_lifetime_yrs)
         for i in range(self.recovery_period_yrs):
-            lifetime_annual_loan_repayment[i] = capital_cost * (1+self.interest_rate*S_lon)/S_lon
+            lifetime_annual_loan_repayment[i] = capital_cost[0] * (1+self.interest_rate*S_lon)/S_lon
 
         # Yearly OPEX or annual operating cost over plant lifetime
         lifetime_annual_opex = np.zeros(self.plant_lifetime_yrs)
@@ -2854,8 +2854,8 @@ class OAECosts:
         interest_payments = np.zeros(self.plant_lifetime_yrs)
         principal_payments = np.zeros(self.recovery_period_yrs)
 
-        loan_balance[0] = capital_cost
-        interest_payments[0] = capital_cost * self.interest_rate
+        loan_balance[0] = capital_cost[0]
+        interest_payments[0] = capital_cost[0] * self.interest_rate
         principal_payments[0] = lifetime_annual_loan_repayment[0] - interest_payments[0]
         loan_balance[1] = loan_balance[0] - principal_payments[0]
 
@@ -2897,7 +2897,7 @@ class OAECosts:
 
         # Yearly revenue of plant ($/yr)
         lifetime_annual_revenue = np.zeros(self.plant_lifetime_yrs)
-        lifetime_annual_revenue[0] = base_revenue
+        lifetime_annual_revenue[0] = base_revenue[0]
         for i in range(len(lifetime_annual_revenue)-1):
             lifetime_annual_revenue[i+1] = lifetime_annual_revenue[i] * (1+self.inflation_rate)
         average_revenue = np.mean(lifetime_annual_revenue)
