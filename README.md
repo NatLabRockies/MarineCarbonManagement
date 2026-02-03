@@ -1,8 +1,8 @@
 # MarineCarbonManagement
+[![PyPI version](https://badge.fury.io/py/marine-carbon-management.svg)](https://badge.fury.io/py/marine-carbon-management)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/marine-carbon-management)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-
 [![Link](https://img.shields.io/badge/Publication-Electrochemical_Direct_Ocean_Capture-brightgreen)](https://www.nrel.gov/docs/fy24osti/90673.pdf)
-
 [![Static Badge](https://img.shields.io/badge/SWR-24--122-purple)](https://www.osti.gov/biblio/code-148916)
 
 The marine carbon management software is an open-source Python based software that contains generic models for marine carbon capture. More models are under development and will be added soon. 
