@@ -1,12 +1,18 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "mcm"
+name = "marine-carbon-management"
 description = "marine carbon management package"
-version = "0.1.0"
+dynamic = ["version"]
+readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE"}
 authors = [
     { name = "Kaitlin Brunik", email = "kaitlin.brunik@nrel.gov" },
     { name = "James Niffenegger", email = "james.niffenegger@nrel.gov" }
 ]
+requires-python = ">=3.10"
 dependencies = [
     "attrs",
     "matplotlib",
@@ -20,11 +26,44 @@ keywords = [
     "direct-ocean-capture",
     "ocean-alkalinity-enhancement",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+source = "https://github.com/NatLabRockies/MarineCarbonManagement"
+# documentation = "https://natlabrockies.github.io/marinecarbonmanagement/"
+issues = "https://github.com/NatLabRockies/MarineCarbonManagement/issues"
+# changelog = "https://github.com/NatLabRockies/MarineCarbonManagement/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 develop = [
-    "pytest",
-    "pytest-subtests",
+    "pytest>=9",
 ]
 examples = ["hopp"]
-
 all = ["hopp[develop,examples]"]
+
+[tool.setuptools.dynamic]
+version = {attr = "mcm.__version__"}
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["mcm"]
