@@ -1,19 +1,25 @@
 # MarineCarbonManagement
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-
 [![Link](https://img.shields.io/badge/Publication-Electrochemical_Direct_Ocean_Capture-brightgreen)](https://www.nrel.gov/docs/fy24osti/90673.pdf)
 
-![Static Badge](https://img.shields.io/badge/SWR-24--122-purple)
+[![Static Badge](https://img.shields.io/badge/SWR-24--122-purple)](https://www.osti.gov/biblio/code-148916)
 
 The marine carbon management software is an open-source Python based software that contains generic models for marine carbon capture. More models are under development and will be added soon. 
 
 ## Software requirements
 
-- Python version 3.9, 3.10, 3.11 64-bit
-- Other versions may still work, but have not been extensively tested at this time
+- Python version 3.10+
 
-## Installing from Source
+## Installing Marine Carbon Management
+
+### PyPI
+
+```bash
+pip install marine-carbon-management
+```
+
+### Source Installation
 
 1. Using Git, navigate to a local target directory and clone repository:
 
@@ -95,7 +101,7 @@ The marine carbon management software is an open-source Python based software th
 
     3. Create a new branch off main, and fix whatever was broken in the build process.
     4. Return to step 5.
-8. Create a new release at https://github.com/NatLabRockies/MarineCarbonManagement/releases,
+8. Create a new release at <https://github.com/NatLabRockies/MarineCarbonManagement/releases>,
   ensuring that:
    1. The newly created tag is selected, and
    2. "Generate release notes" is selected.
