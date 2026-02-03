@@ -66,3 +66,41 @@ The marine carbon management software is an open-source Python based software th
     ```bash
     pytest
     ```
+
+## Release Notes
+
+1. Ensure tests pass.
+2. Ensure README is up to date with any updated information.
+3. Ensure dependency and Python versions are up to date.
+4. Ensure `CHANGELOG.md` is up to date.
+5. Bump version in `mcm/__init__.py` using semantic versioning logic (https://semver.org/).
+6. Make a pull request into the `main` branch from `develop` or a patch release branch.
+   1. Merge `main` back into `develop`, if `develop` was not the base branch.
+7. Tag the new release and push it.
+
+    ```bash
+    git tag -a v1.2.3 -m "message for v1.2.3"
+    git push origin v1.2.3
+    ```
+
+    1. This will kick off the "Deploy to Test PyPI" GitHub action. If this aciton passes
+      successfully, move onto the step 8. If the action failed, keep following these sub
+      instructions.
+    2. Delete the tag locally and on remote.
+
+        ```bash
+        git tag -d v1.2.3
+        git push --delete origin v1.2.3
+        ```
+
+    3. Create a new branch off main, and fix whatever was broken in the build process.
+    4. Return to step 5.
+8. Create a new release at https://github.com/NatLabRockies/MarineCarbonManagement/releases,
+  ensuring that:
+   1. The newly created tag is selected, and
+   2. "Generate release notes" is selected.
+
+  This will kick off the "Deploy to PyPI" GitHub action, and should pass if the "Deploy to Test
+  PyPI" action passed. In the rare instance that the "Deploy to PyPI" action fails, follow the steps
+  starting at 6.2. Just note that the Test PyPI action will now fail, so there will not be a check
+  to ensure publishing to PyPI should work.
