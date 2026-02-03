@@ -66,4 +66,5 @@ version = {attr = "mcm.__version__"}
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["mcm"]
+include = ["mcm"]
+exclude = ["tests"]
