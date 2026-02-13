@@ -2546,7 +2546,7 @@ def run_ocean_alkalinity_enhancement_physics_model(
         if show_plots:
             plt.show()
 
-        return (ranges, res)
+    return (ranges, res)
     
 @define
 class OAECosts:
