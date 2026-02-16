@@ -2174,6 +2174,258 @@ def run_ocean_alkalinity_enhancement_physics_model(
             tempOut[i] = seawater_config.tempC
             caOut[i] = seawater_config.ca_i
 
+    # Design Inputs
+    design_inputs = {
+        "Maximum Power Need for ED System (W)": round(oae_config.P_edMax, 2),
+        "Maximum Flow Rate for ED System (m3/s)": oae_config.Q_edMax,
+        "Percentage of ED Flow that Becomes Base (%)": round(oae_config.frac_baseFlow*100,2),
+        "Concentration of Acid Made by ED (M)": oae_config.c_a,
+        "Concentration of Base Made by ED (M)": oae_config.c_b,
+        "Minimum Number of ED Units Used": oae_config.N_edMin,
+        "Maximum Number of ED Units Used": oae_config.N_edMax,
+        "Acid Production Efficiency (Wh/mol HCl)": round(oae_config.E_HCl*1000, 2),
+        "Base Production Efficiency (Wh/mol NaOH)": round(oae_config.E_NaOH*1000, 2),
+        "Method of Acid Disposal": oae_config.acid_disposal_method,
+        "Average Seawater Temperature (C)": seawater_config.tempC_i,
+        "Average Seawater Salinity (ppt)": round(seawater_config.sal_ppt_i,2),
+        "Initial Seawater pH": seawater_config.pH_i,
+        "Initial Seawater DIC (M)": seawater_config.dic_i,
+    }
+    diDF = pd.DataFrame(design_inputs, index=[0]).T
+    diDF = diDF.reset_index()
+    diDF.columns = ["Design Input", "Values"]
+
+    # Time Dependent Inputs and Results
+    timeDepDict = {
+        "Input Power (W)": power_profile_w,
+        "Scenario": res.OAE_outputs["S_t"],
+        "ED Units Active": res.OAE_outputs["N_ed"],
+        "Excess Power (W)": res.OAE_outputs["P_xs"],
+        "Concentration of Acid Made (mol/L)": res.OAE_outputs["c_a"],
+        "Concentration of Base Made (mol/L)": res.OAE_outputs["c_b"],
+        "Moles of Base Added to Seawater (mol)": res.OAE_outputs["mol_OH"],
+        "Moles of Excess Acid Generated (mol)": res.OAE_outputs["mol_HCl"],
+        "Mass of CO2 Absorbed (kg)": res.OAE_outputs["mass_CO2_absorbed"],
+        "Volume of Excess Acid (m3)": res.OAE_outputs["volExcessAcid"],
+        "Base Tank Volume (m3)": res.OAE_outputs["tank_vol_b"],
+        "Base Added Volume (m3)": res.OAE_outputs["volBase"],
+        "Acid Tank Volume (m3)": res.OAE_outputs["tank_vol_a"],
+        "Acid Added Volume (m3)": res.OAE_outputs["volAcid"],
+        "Seawater Flow Rate Into Plant (m3/s)": res.OAE_outputs["Qin"],
+        "Seawater Flow Rate Out of Plant (m3/s)": res.OAE_outputs["Qout"],
+        "pH of Effluent Seawater": res.OAE_outputs["pH_f"],
+        "DIC of Effluent Seawater (mol/L)": res.OAE_outputs["dic_f"],
+        "TA of Effluent Seawater (mol/L)": res.OAE_outputs["ta_f"],
+        "Salinity of Effluent Seawater (ppt)": res.OAE_outputs["sal_f"],
+        "Temperature of Effluent Seawater (C)": res.OAE_outputs["temp_f"],
+        "Calcium of Effluent Seawater (mol/L)": res.OAE_outputs["ca_f"],
+        "Alkaline Solid Added (g)": res.OAE_outputs["alkaline_solid_added"],
+
+    }
+    timeDepDF = pd.DataFrame(timeDepDict)
+
+    # Scenario Ranges for Simulations
+    # Define scenarios and related ranges
+    scenarios = [
+        (
+            "S1: Base Added to Seawater, Tanks Not Filled, ED On",
+            ranges.S1["pwrRanges"],
+            oae_config.N_edMin,
+            0,
+        ),
+        (
+            "S2: Base Added to Seawater, Tanks Filled, ED On",
+            ranges.S2["pwrRanges"],
+            ranges.S2_ranges[:, 0],
+            ranges.S2_ranges[:, 1],
+        ),
+        (
+            "S3: Base Added to Seawater, Tanks Emptied, ED Off",
+            ranges.S3["pwrRanges"],
+            oae_config.N_edMin,
+            0,
+        ),
+        (
+            "S4: No Base Added to Seawater, Tanks Filled, ED On",
+            ranges.S4["pwrRanges"],
+            0,
+            oae_config.N_edMin,
+        ),
+    ]
+
+    # Generate scenario names
+    scenNames = [
+        name for name, pwrRange, *_ in scenarios for _ in range(len(pwrRange))
+    ]
+
+    # Number of ED units (or equivalent) used for OAE
+    scenEDoae = np.zeros(len(ranges.S1["pwrRanges"])+len(ranges.S2["pwrRanges"])+len(ranges.S3["pwrRanges"])+len(ranges.S4["pwrRanges"]))
+    edo = 0 # ED units used for OAE counter
+    for i in range(len(ranges.S1["pwrRanges"])):
+        scenEDoae[edo] = oae_config.N_edMin + i
+        edo = edo + 1
+    for i in range(len(ranges.S2["pwrRanges"])):
+        scenEDoae[edo] = ranges.S2_ranges[i,0]
+        edo = edo + 1
+    for i in range(len(ranges.S3["pwrRanges"])):
+        scenEDoae[edo] = oae_config.N_edMin + i
+        edo = edo + 1
+    for i in range(len(ranges.S4["pwrRanges"])):
+        scenEDoae[edo] = 0
+        edo = edo +1
+    # Number of ED units used to fill tanks
+    scenEDtank = np.zeros(len(ranges.S1["pwrRanges"])+len(ranges.S2["pwrRanges"])+len(ranges.S3["pwrRanges"])+len(ranges.S4["pwrRanges"]))
+    edt = 0 # ED units used for filling tanks counter
+    for i in range(len(ranges.S1["pwrRanges"])):
+        scenEDtank[edt] = 0
+        edt = edt + 1
+    for i in range(len(ranges.S2["pwrRanges"])):
+        scenEDtank[edt] = ranges.S2_ranges[i,1]
+        edt = edt + 1
+    for i in range(len(ranges.S3["pwrRanges"])):
+        scenEDtank[edt] = 0
+        edt = edt + 1
+    for i in range(len(ranges.S4["pwrRanges"])):
+        scenEDtank[edt] = oae_config.N_edMin + i
+        edt = edt + 1
+
+    # Power, mCC, acid, and base values
+    scenPwr = np.concatenate([pwrRange for _, pwrRange, *_ in scenarios])
+    scenNB = np.concatenate(
+        [getattr(ranges, key)["mol_OH"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenNA = np.concatenate(
+        [getattr(ranges, key)["mol_HCl"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenCDR = np.concatenate(
+        [getattr(ranges, key)["mass_CO2_absorbed"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenVolExcessAcid = np.concatenate(
+        [getattr(ranges, key)["volExcessAcid"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenVolBase = np.concatenate(
+        [getattr(ranges, key)["volBase"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenVolAcid = np.concatenate(
+        [getattr(ranges, key)["volAcid"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenMadSolid = np.concatenate(
+        [getattr(ranges, key)["alkaline_solid_added"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenPH = np.concatenate(
+        [getattr(ranges, key)["pH_f"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenDIC = np.concatenate(
+        [getattr(ranges, key)["dic_f"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenTA = np.concatenate(
+        [getattr(ranges, key)["ta_f"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenSAL = np.concatenate(
+        [getattr(ranges, key)["sal_f"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenQout = np.concatenate(
+        [getattr(ranges, key)["Qout"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenAlk2Acid = np.concatenate(
+        [getattr(ranges, key)["alkaline_to_acid"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+    scenRCApower = np.concatenate(
+        [getattr(ranges, key)["rca_power"] for key in ["S1", "S2", "S3", "S4"]]
+    )
+
+    # Create dictionary and save CSV
+    scenDict = {
+        "Scenario": scenNames,
+        "ED Units Used for OAE (or Equivalent for S3)": scenEDoae,
+        "ED Units Used to Fill Tanks": scenEDtank,
+        "Power Needed (W)": scenPwr,
+        "Rate of Base Added to Seawater (molOH/hr)":scenNB,
+        "Rate of CO2 Absorbed (kgCO2/hr)": scenCDR,
+        "Rate of Excess Acid Generated (molHCl/hr)":scenNA,
+        "Rate of Excess Acid Produced (m3/hr)":scenVolExcessAcid,
+        "Volume of Base Added to Tanks (m3)":scenVolBase,
+        "Volume of Acid Added to Tanks (m3)":scenVolAcid, 
+        "Mass of Alkaline Solid Used of Acid Disposal (g)":scenMadSolid,
+        "Ratio of Alkaline Solid to Acid for Neutralization (g/L)":scenAlk2Acid, 
+        "RCA Power (W)": scenRCApower,
+        "Effluent pH":scenPH, 
+        "Effluent DIC (M)":scenDIC, 
+        "Effluent TA (M)":scenTA, 
+        "Effluent Salinity (ppt)":scenSAL,
+        "Effluent Volume (m3)": scenQout*3600
+    }
+
+    scenDF = pd.DataFrame(scenDict)
+
+    # Totals for Simulations
+    total_results = {
+        "Average Moles of Base Added to Seawater (molOH/yr)": res.mol_OH_yr,
+        "Average pH of Effluent": round(res.pH_avg,2),
+        "Average DIC of Effluent (M)": res.dic_avg, 
+        "Average TA of Effluent (M)": res.ta_avg,
+        "Average Temperature of Effluent (C)": round(res.tempC_avg,2),
+        "Average Salinity of Effluent (ppt)": round(res.sal_avg,2),
+        "Average Volume of Effluent (m3/yr)": round(res.volOAEbase_yr,2),
+        "Min Total Power Need for OAE (W)": round(min(ranges.S3["pwrRanges"]),2),
+        "Max Total Power Need for OAE (W)": round(max(ranges.S1["pwrRanges"]),2),
+        "Min OAE Rate (molOH/hr)": round(min(ranges.S1["mol_OH"]),2),
+        "Max OAE Rate (molOH/hr)": round(max(ranges.S1["mol_OH"]),2),
+        "Base Added to Seawater Under 100% Max Power (molOH/yr)": res.mol_OH_yr_MaxPwr,
+        "OAE Capacity Factor (%)": round(res.oae_capacity_factor,2),
+        "Fraction of Time OAE is Performed (%)": round(res.overall_capacity_factor,2),
+        "Max Tank Fill (m3)": round(max(res.OAE_outputs["tank_vol_b"]),2),
+        "Max Tank Fill (%)": round(res.max_tank_fill_percent),
+        "Min ED Power (W)": round(oae_config.P_ed1
+        * oae_config.N_edMin,2),
+        "Max ED Power (W)": round(oae_config.P_ed1
+        * oae_config.N_edMax,2),
+        "Min Pump Power (W)": round(ranges.pump_power_min*10e6,3),
+        "Max Pump Power (W)": round(ranges.pump_power_max*10e6,3),
+        "Min Intake Pump Flow Rate (m3/s)": round(ranges.pumps.pumpO.Q_min,2),
+        "Max Intake Pump Flow Rate (m3/s)": round(ranges.pumps.pumpO.Q_max,2),
+        "Average Moles of Excess Acid Generated (molHCl/yr)": round(res.mol_HCl_yr,2),
+        "Average Volume of Excess Acid Produced (m3/yr)": round(res.volXSacid_yr,2),
+        "pH of Excess Acid": round(res.pH_HCl_excess,2),
+        "Average Mass of Alkaline Solid Used for Acid Disposal (g/yr)": round(res.m_adSolid_yr,2),
+        "Ratio of Alkaline Solid to Acid for Neutralization (g/L)": round(ranges.S1["alkaline_to_acid"][0],5),
+        "Mass of Products Made (tonnes/yr)": res.M_rev_yr,
+        "Value of Products Made ($/yr)": res.X_rev_yr,
+        "Mass of Acid Disposed of (tonnes/yr)": res.M_disposed_yr,
+        "Disposal Cost of Acid ($/t)": res.X_disp,
+        "Estimated CDR (0.8 mol CO2:NaOH) (tCO2/yr)": res.M_co2est,
+        "Estimated Max CDR Scale (0.8 mol CO2:NaOH) (tCO2/yr)": res.M_co2cap,
+        "Maximum Mass of RCA Tumbler Slurry (g)": res.slurry_mass_max,
+    }
+    totsDF = pd.DataFrame(total_results, index=[0]).T
+    totsDF = totsDF.reset_index()
+    totsDF.columns = ["Parameter", "Values"]
+
+    biogeochem_results = {
+        "Day": iDays,
+        "Average Flow Rate of Alaline Seawater (m3/s)": QswOut,
+        "pH of Alkaline Seawater": pHavgOut,
+        "DIC of Alkaline Seawater (mol/m3)": dicOut*10**6,
+        "TA of Alkaline Seawater (mol/m3)": taOut*10**6,
+        "Salinity of Alkaline Seawater (ppt)": salOut,
+        "Temperature of Alkaline Seawater (C)": tempOut,
+        "Calcium of Alkaline Seawater (mol/m3)": caOut*10**6,
+    }
+    biogeochemDF = pd.DataFrame(biogeochem_results)
+
+    biogeochem_hourly = {
+        "Hour": np.arange(0, len(res.OAE_outputs["Qout"])),
+        "Flow Rate of Alkaline Seawater (m3/s)": res.OAE_outputs["Qout"],
+        "pH of Alkaline Seawater": res.OAE_outputs["pH_f"],
+        "DIC of Alkaline Seawater (mol/m3)": res.OAE_outputs["dic_f"]*10**6,
+        "TA of Alkaline Seawater (mol/m3)": res.OAE_outputs["ta_f"]*10**6,
+        "Calcium of Alkaline Seawater (mol/m3)": res.OAE_outputs["ca_f"]*10**6,
+        "Salinity of Alkaline Seawater (ppt)": res.OAE_outputs["sal_f"],
+        "Temperature of Alkaline Seawater (C)": res.OAE_outputs["temp_f"],
+    }
+
+    biogeochem_hourlyDF = pd.DataFrame(biogeochem_hourly)
+
     if save_plots or save_outputs:
         save_paths = [output_dir + "figures/", output_dir + "data/"]
 
@@ -2181,272 +2433,27 @@ def run_ocean_alkalinity_enhancement_physics_model(
             if not os.path.exists(savepath):
                 os.makedirs(savepath)
 
+            
     if save_outputs:
-            # Design Inputs
-            design_inputs = {
-                "Maximum Power Need for ED System (W)": round(oae_config.P_edMax, 2),
-                "Maximum Flow Rate for ED System (m3/s)": oae_config.Q_edMax,
-                "Percentage of ED Flow that Becomes Base (%)": round(oae_config.frac_baseFlow*100,2),
-                "Concentration of Acid Made by ED (M)": oae_config.c_a,
-                "Concentration of Base Made by ED (M)": oae_config.c_b,
-                "Minimum Number of ED Units Used": oae_config.N_edMin,
-                "Maximum Number of ED Units Used": oae_config.N_edMax,
-                "Acid Production Efficiency (Wh/mol HCl)": round(oae_config.E_HCl*1000, 2),
-                "Base Production Efficiency (Wh/mol NaOH)": round(oae_config.E_NaOH*1000, 2),
-                "Method of Acid Disposal": oae_config.acid_disposal_method,
-                "Average Seawater Temperature (C)": seawater_config.tempC_i,
-                "Average Seawater Salinity (ppt)": round(seawater_config.sal_ppt_i,2),
-                "Initial Seawater pH": seawater_config.pH_i,
-                "Initial Seawater DIC (M)": seawater_config.dic_i,
-            }
-            diDF = pd.DataFrame(design_inputs, index=[0]).T
-            diDF = diDF.reset_index()
-            diDF.columns = ["Design Input", "Values"]
-            diDF.to_csv(save_paths[1] + "OAE_resultTotals.csv", index=False)
+        diDF.to_csv(save_paths[1] + "OAE_resultTotals.csv", index=False)
 
-            # Time Dependent Inputs and Results
-            timeDepDict = {
-                "Input Power (W)": power_profile_w,
-                "Scenario": res.OAE_outputs["S_t"],
-                "ED Units Active": res.OAE_outputs["N_ed"],
-                "Excess Power (W)": res.OAE_outputs["P_xs"],
-                "Concentration of Acid Made (mol/L)": res.OAE_outputs["c_a"],
-                "Concentration of Base Made (mol/L)": res.OAE_outputs["c_b"],
-                "Moles of Base Added to Seawater (mol)": res.OAE_outputs["mol_OH"],
-                "Moles of Excess Acid Generated (mol)": res.OAE_outputs["mol_HCl"],
-                "Mass of CO2 Absorbed (kg)": res.OAE_outputs["mass_CO2_absorbed"],
-                "Volume of Excess Acid (m3)": res.OAE_outputs["volExcessAcid"],
-                "Base Tank Volume (m3)": res.OAE_outputs["tank_vol_b"],
-                "Base Added Volume (m3)": res.OAE_outputs["volBase"],
-                "Acid Tank Volume (m3)": res.OAE_outputs["tank_vol_a"],
-                "Acid Added Volume (m3)": res.OAE_outputs["volAcid"],
-                "Seawater Flow Rate Into Plant (m3/s)": res.OAE_outputs["Qin"],
-                "Seawater Flow Rate Out of Plant (m3/s)": res.OAE_outputs["Qout"],
-                "pH of Effluent Seawater": res.OAE_outputs["pH_f"],
-                "DIC of Effluent Seawater (mol/L)": res.OAE_outputs["dic_f"],
-                "TA of Effluent Seawater (mol/L)": res.OAE_outputs["ta_f"],
-                "Salinity of Effluent Seawater (ppt)": res.OAE_outputs["sal_f"],
-                "Temperature of Effluent Seawater (C)": res.OAE_outputs["temp_f"],
-                "Calcium of Effluent Seawater (mol/L)": res.OAE_outputs["ca_f"],
-                "Alkaline Solid Added (g)": res.OAE_outputs["alkaline_solid_added"],
+        timeDepDF.to_csv(
+            save_paths[1] + "OAE_timeDependentResults.csv", mode="a", index=False
+        )
 
-            }
-            timeDepDF = pd.DataFrame(timeDepDict)
-            timeDepDF.to_csv(
-                save_paths[1] + "OAE_timeDependentResults.csv", mode="a", index=False
-            )
+        scenDF.to_csv(
+            save_paths[1] + "OAE_operationScenarios.csv", index=False
+        )
 
-            # Scenario Ranges for Simulations
-            # Define scenarios and related ranges
-            scenarios = [
-                (
-                    "S1: Base Added to Seawater, Tanks Not Filled, ED On",
-                    ranges.S1["pwrRanges"],
-                    oae_config.N_edMin,
-                    0,
-                ),
-                (
-                    "S2: Base Added to Seawater, Tanks Filled, ED On",
-                    ranges.S2["pwrRanges"],
-                    ranges.S2_ranges[:, 0],
-                    ranges.S2_ranges[:, 1],
-                ),
-                (
-                    "S3: Base Added to Seawater, Tanks Emptied, ED Off",
-                    ranges.S3["pwrRanges"],
-                    oae_config.N_edMin,
-                    0,
-                ),
-                (
-                    "S4: No Base Added to Seawater, Tanks Filled, ED On",
-                    ranges.S4["pwrRanges"],
-                    0,
-                    oae_config.N_edMin,
-                ),
-            ]
+        totsDF.to_csv(save_paths[1] + "OAE_resultTotals.csv", mode="a", index=False)
 
-            # Generate scenario names
-            scenNames = [
-                name for name, pwrRange, *_ in scenarios for _ in range(len(pwrRange))
-            ]
+        biogeochemDF.to_csv(
+            save_paths[1] + "OAE_biogeochemResults.csv", index=False
+        )
 
-            # Number of ED units (or equivalent) used for OAE
-            scenEDoae = np.zeros(len(ranges.S1["pwrRanges"])+len(ranges.S2["pwrRanges"])+len(ranges.S3["pwrRanges"])+len(ranges.S4["pwrRanges"]))
-            edo = 0 # ED units used for OAE counter
-            for i in range(len(ranges.S1["pwrRanges"])):
-                scenEDoae[edo] = oae_config.N_edMin + i
-                edo = edo + 1
-            for i in range(len(ranges.S2["pwrRanges"])):
-                scenEDoae[edo] = ranges.S2_ranges[i,0]
-                edo = edo + 1
-            for i in range(len(ranges.S3["pwrRanges"])):
-                scenEDoae[edo] = oae_config.N_edMin + i
-                edo = edo + 1
-            for i in range(len(ranges.S4["pwrRanges"])):
-                scenEDoae[edo] = 0
-                edo = edo +1
-            # Number of ED units used to fill tanks
-            scenEDtank = np.zeros(len(ranges.S1["pwrRanges"])+len(ranges.S2["pwrRanges"])+len(ranges.S3["pwrRanges"])+len(ranges.S4["pwrRanges"]))
-            edt = 0 # ED units used for filling tanks counter
-            for i in range(len(ranges.S1["pwrRanges"])):
-                scenEDtank[edt] = 0
-                edt = edt + 1
-            for i in range(len(ranges.S2["pwrRanges"])):
-                scenEDtank[edt] = ranges.S2_ranges[i,1]
-                edt = edt + 1
-            for i in range(len(ranges.S3["pwrRanges"])):
-                scenEDtank[edt] = 0
-                edt = edt + 1
-            for i in range(len(ranges.S4["pwrRanges"])):
-                scenEDtank[edt] = oae_config.N_edMin + i
-                edt = edt + 1
-
-            # Power, mCC, acid, and base values
-            scenPwr = np.concatenate([pwrRange for _, pwrRange, *_ in scenarios])
-            scenNB = np.concatenate(
-                [getattr(ranges, key)["mol_OH"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenNA = np.concatenate(
-                [getattr(ranges, key)["mol_HCl"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenCDR = np.concatenate(
-                [getattr(ranges, key)["mass_CO2_absorbed"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenVolExcessAcid = np.concatenate(
-                [getattr(ranges, key)["volExcessAcid"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenVolBase = np.concatenate(
-                [getattr(ranges, key)["volBase"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenVolAcid = np.concatenate(
-                [getattr(ranges, key)["volAcid"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenMadSolid = np.concatenate(
-                [getattr(ranges, key)["alkaline_solid_added"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenPH = np.concatenate(
-                [getattr(ranges, key)["pH_f"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenDIC = np.concatenate(
-                [getattr(ranges, key)["dic_f"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenTA = np.concatenate(
-                [getattr(ranges, key)["ta_f"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenSAL = np.concatenate(
-                [getattr(ranges, key)["sal_f"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenQout = np.concatenate(
-                [getattr(ranges, key)["Qout"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenAlk2Acid = np.concatenate(
-                [getattr(ranges, key)["alkaline_to_acid"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-            scenRCApower = np.concatenate(
-                [getattr(ranges, key)["rca_power"] for key in ["S1", "S2", "S3", "S4"]]
-            )
-
-            # Create dictionary and save CSV
-            scenDict = {
-                "Scenario": scenNames,
-                "ED Units Used for OAE (or Equivalent for S3)": scenEDoae,
-                "ED Units Used to Fill Tanks": scenEDtank,
-                "Power Needed (W)": scenPwr,
-                "Rate of Base Added to Seawater (molOH/hr)":scenNB,
-                "Rate of CO2 Absorbed (kgCO2/hr)": scenCDR,
-                "Rate of Excess Acid Generated (molHCl/hr)":scenNA,
-                "Rate of Excess Acid Produced (m3/hr)":scenVolExcessAcid,
-                "Volume of Base Added to Tanks (m3)":scenVolBase,
-                "Volume of Acid Added to Tanks (m3)":scenVolAcid, 
-                "Mass of Alkaline Solid Used of Acid Disposal (g)":scenMadSolid,
-                "Ratio of Alkaline Solid to Acid for Neutralization (g/L)":scenAlk2Acid, 
-                "RCA Power (W)": scenRCApower,
-                "Effluent pH":scenPH, 
-                "Effluent DIC (M)":scenDIC, 
-                "Effluent TA (M)":scenTA, 
-                "Effluent Salinity (ppt)":scenSAL,
-                "Effluent Volume (m3)": scenQout*3600
-            }
-
-            scenDF = pd.DataFrame(scenDict)
-            scenDF.to_csv(
-                save_paths[1] + "OAE_operationScenarios.csv", index=False
-            )
-
-            # Totals for Simulations
-            total_results = {
-                "Average Moles of Base Added to Seawater (molOH/yr)": res.mol_OH_yr,
-                "Average pH of Effluent": round(res.pH_avg,2),
-                "Average DIC of Effluent (M)": res.dic_avg, 
-                "Average TA of Effluent (M)": res.ta_avg,
-                "Average Temperature of Effluent (C)": round(res.tempC_avg,2),
-                "Average Salinity of Effluent (ppt)": round(res.sal_avg,2),
-                "Average Volume of Effluent (m3/yr)": round(res.volOAEbase_yr,2),
-                "Min Total Power Need for OAE (W)": round(min(ranges.S3["pwrRanges"]),2),
-                "Max Total Power Need for OAE (W)": round(max(ranges.S1["pwrRanges"]),2),
-                "Min OAE Rate (molOH/hr)": round(min(ranges.S1["mol_OH"]),2),
-                "Max OAE Rate (molOH/hr)": round(max(ranges.S1["mol_OH"]),2),
-                "Base Added to Seawater Under 100% Max Power (molOH/yr)": res.mol_OH_yr_MaxPwr,
-                "OAE Capacity Factor (%)": round(res.oae_capacity_factor,2),
-                "Fraction of Time OAE is Performed (%)": round(res.overall_capacity_factor,2),
-                "Max Tank Fill (m3)": round(max(res.OAE_outputs["tank_vol_b"]),2),
-                "Max Tank Fill (%)": round(res.max_tank_fill_percent),
-                "Min ED Power (W)": round(oae_config.P_ed1
-                * oae_config.N_edMin,2),
-                "Max ED Power (W)": round(oae_config.P_ed1
-                * oae_config.N_edMax,2),
-                "Min Pump Power (W)": round(ranges.pump_power_min*10e6,3),
-                "Max Pump Power (W)": round(ranges.pump_power_max*10e6,3),
-                "Min Intake Pump Flow Rate (m3/s)": round(ranges.pumps.pumpO.Q_min,2),
-                "Max Intake Pump Flow Rate (m3/s)": round(ranges.pumps.pumpO.Q_max,2),
-                "Average Moles of Excess Acid Generated (molHCl/yr)": round(res.mol_HCl_yr,2),
-                "Average Volume of Excess Acid Produced (m3/yr)": round(res.volXSacid_yr,2),
-                "pH of Excess Acid": round(res.pH_HCl_excess,2),
-                "Average Mass of Alkaline Solid Used for Acid Disposal (g/yr)": round(res.m_adSolid_yr,2),
-                "Ratio of Alkaline Solid to Acid for Neutralization (g/L)": round(ranges.S1["alkaline_to_acid"][0],5),
-                "Mass of Products Made (tonnes/yr)": res.M_rev_yr,
-                "Value of Products Made ($/yr)": res.X_rev_yr,
-                "Mass of Acid Disposed of (tonnes/yr)": res.M_disposed_yr,
-                "Disposal Cost of Acid ($/t)": res.X_disp,
-                "Estimated CDR (0.8 mol CO2:NaOH) (tCO2/yr)": res.M_co2est,
-                "Estimated Max CDR Scale (0.8 mol CO2:NaOH) (tCO2/yr)": res.M_co2cap,
-                "Maximum Mass of RCA Tumbler Slurry (g)": res.slurry_mass_max,
-            }
-            totsDF = pd.DataFrame(total_results, index=[0]).T
-            totsDF = totsDF.reset_index()
-            totsDF.columns = ["Parameter", "Values"]
-            totsDF.to_csv(save_paths[1] + "OAE_resultTotals.csv", mode="a", index=False)
-
-            biogeochem_results = {
-                "Day": iDays,
-                "Average Flow Rate of Alaline Seawater (m3/s)": QswOut,
-                "pH of Alkaline Seawater": pHavgOut,
-                "DIC of Alkaline Seawater (mol/m3)": dicOut*10**6,
-                "TA of Alkaline Seawater (mol/m3)": taOut*10**6,
-                "Salinity of Alkaline Seawater (ppt)": salOut,
-                "Temperature of Alkaline Seawater (C)": tempOut,
-                "Calcium of Alkaline Seawater (mol/m3)": caOut*10**6,
-            }
-            biogeochemDF = pd.DataFrame(biogeochem_results)
-            biogeochemDF.to_csv(
-                save_paths[1] + "OAE_biogeochemResults.csv", index=False
-            )
-
-            biogeochem_hourly = {
-                "Hour": np.arange(0, len(res.OAE_outputs["Qout"])),
-                "Flow Rate of Alkaline Seawater (m3/s)": res.OAE_outputs["Qout"],
-                "pH of Alkaline Seawater": res.OAE_outputs["pH_f"],
-                "DIC of Alkaline Seawater (mol/m3)": res.OAE_outputs["dic_f"]*10**6,
-                "TA of Alkaline Seawater (mol/m3)": res.OAE_outputs["ta_f"]*10**6,
-                "Calcium of Alkaline Seawater (mol/m3)": res.OAE_outputs["ca_f"]*10**6,
-                "Salinity of Alkaline Seawater (ppt)": res.OAE_outputs["sal_f"],
-                "Temperature of Alkaline Seawater (C)": res.OAE_outputs["temp_f"],
-            }
-
-            biogeochem_hourlyDF = pd.DataFrame(biogeochem_hourly)
-            biogeochem_hourlyDF.to_csv(
-                save_paths[1] + "OAE_biogeochem_hourly_results.csv", index=False
-            )
+        biogeochem_hourlyDF.to_csv(
+            save_paths[1] + "OAE_biogeochem_hourly_results.csv", index=False
+        )
 
     if save_plots or show_plots:
         # Create time as a NumPy array for easy indexing
@@ -2539,7 +2546,7 @@ def run_ocean_alkalinity_enhancement_physics_model(
         if show_plots:
             plt.show()
 
-        return (ranges, res)
+    return (ranges, res)
     
 @define
 class OAECosts:
@@ -2829,7 +2836,7 @@ class OAECosts:
 
         # Yearly techincal operating cost over plant lifetime
         lifetime_annual_operating_cost = np.zeros(self.plant_lifetime_yrs) 
-        lifetime_annual_operating_cost[0] = annual_operating_cost[0] 
+        lifetime_annual_operating_cost[0] = annual_operating_cost 
         for i in range(len(lifetime_annual_operating_cost)-1):
             lifetime_annual_operating_cost[i+1] = lifetime_annual_operating_cost[i] * (1+self.inflation_rate)
 
@@ -2839,7 +2846,7 @@ class OAECosts:
             S_lon = S_lon + (1+self.interest_rate)**t
         lifetime_annual_loan_repayment = np.zeros(self.plant_lifetime_yrs)
         for i in range(self.recovery_period_yrs):
-            lifetime_annual_loan_repayment[i] = capital_cost[0] * (1+self.interest_rate*S_lon)/S_lon
+            lifetime_annual_loan_repayment[i] = capital_cost * (1+self.interest_rate*S_lon)/S_lon
 
         # Yearly OPEX or annual operating cost over plant lifetime
         lifetime_annual_opex = np.zeros(self.plant_lifetime_yrs)
@@ -2854,8 +2861,8 @@ class OAECosts:
         interest_payments = np.zeros(self.plant_lifetime_yrs)
         principal_payments = np.zeros(self.recovery_period_yrs)
 
-        loan_balance[0] = capital_cost[0]
-        interest_payments[0] = capital_cost[0] * self.interest_rate
+        loan_balance[0] = capital_cost
+        interest_payments[0] = capital_cost * self.interest_rate
         principal_payments[0] = lifetime_annual_loan_repayment[0] - interest_payments[0]
         loan_balance[1] = loan_balance[0] - principal_payments[0]
 
@@ -2897,7 +2904,7 @@ class OAECosts:
 
         # Yearly revenue of plant ($/yr)
         lifetime_annual_revenue = np.zeros(self.plant_lifetime_yrs)
-        lifetime_annual_revenue[0] = base_revenue[0]
+        lifetime_annual_revenue[0] = base_revenue
         for i in range(len(lifetime_annual_revenue)-1):
             lifetime_annual_revenue[i+1] = lifetime_annual_revenue[i] * (1+self.inflation_rate)
         average_revenue = np.mean(lifetime_annual_revenue)
