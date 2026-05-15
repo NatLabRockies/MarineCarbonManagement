@@ -74,8 +74,8 @@ class OAEInputs:
     frac_EDflow: float = field(default=None)
     frac_baseFlow: float = field(default=1/2, validator=range_val(0, 1))
     frac_acidFlow: float = field(default=None)
-    c_a: float = 0.49
-    c_b: float = 0.54
+    c_a: float = field(default=0.49, validator=gt_zero)
+    c_b: float = field(default = 0.54, validator=gt_zero)
     use_storage_tanks: bool = field(default=True)
     store_hours: float = field(default=12)
     acid_disposal_method: str = field(default="sell acid", validator=contains(["sell acid", "sell rca", "acid disposal"]))
