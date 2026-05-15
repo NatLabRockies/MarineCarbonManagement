@@ -270,20 +270,22 @@ class Pump:
         if Q == 0:
             P_pump = 0
         elif Q < self.Q_min:
-            warnings.warn(
-                f"Pump {self.name:s}: Flow Rate is {(self.Q_min - Q) / self.Q_min * 100:.2f}% less than the range provided for pump power. Defaulting to minimum flow rate: {self.Q_min:.2f} (m³/s).",
-                UserWarning,
-            )
+            if Q < self.Q_min*0.9999:
+                warnings.warn(
+                    f"Pump {self.name:s}: Flow Rate is {(self.Q_min - Q) / self.Q_min * 100:.2f}% less than the range provided for pump power. Defaulting to minimum flow rate: {self.Q_min:.2f} (m³/s).",
+                    UserWarning,
+                )
             Q = self.Q_min
             perc_range = (Q - self.Q_min) / (self.Q_max - self.Q_min)
             p_bar = (self.p_max_bar - self.p_min_bar) * perc_range + self.p_min_bar
             p = p_bar * 100000  # convert from bar to Pa
             P_pump = Q * p / self.eff
         elif Q > self.Q_max:
-            warnings.warn(
-                f"Flow Rate is {(Q - self.Q_max) / self.Q_max * 100:.2f}% larger than the range provided for pump power. Defaulting to maximum flow rate: {self.Q_max:.2f} (m³/s).",
-                UserWarning,
-            )
+            if Q > self.Q_max*1.0001:
+                warnings.warn(
+                    f"Flow Rate is {(Q - self.Q_max) / self.Q_max * 100:.2f}% larger than the range provided for pump power. Defaulting to maximum flow rate: {self.Q_max:.2f} (m³/s).",
+                    UserWarning,
+                )
             Q = self.Q_max
             perc_range = (Q - self.Q_min) / (self.Q_max - self.Q_min)
             p_bar = (self.p_max_bar - self.p_min_bar) * perc_range + self.p_min_bar
